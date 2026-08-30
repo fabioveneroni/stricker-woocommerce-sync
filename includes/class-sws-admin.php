@@ -68,11 +68,11 @@ class SWS_Admin {
     public static function connection() {
         self::header( 'Stricker Sync — Conexão' );
 
-        if ( isset( $_GET['sws_test'] ) ) {
-            $ok = 'success' === sanitize_key( $_GET['sws_test'] );
-            echo '<div class="notice notice-' . ( $ok ? 'success' : 'error' ) . '"><p>' .
-                esc_html( $ok ? 'Conexão validada com sucesso!' : ( isset( $_GET['sws_msg'] ) ? rawurldecode( wp_unslash( $_GET['sws_msg'] ) ) : 'Falha na conexão.' ) ) .
-                '</p></div>';
+        $notice = get_transient( 'sws_connection_notice_' . get_current_user_id() );
+        if ( is_array( $notice ) && ! empty( $notice['message'] ) ) {
+            delete_transient( 'sws_connection_notice_' . get_current_user_id() );
+            $type = in_array( $notice['type'], array( 'success', 'error', 'warning', 'info' ), true ) ? $notice['type'] : 'info';
+            echo '<div class="notice notice-' . esc_attr( $type ) . ' is-dismissible"><p>' . esc_html( $notice['message'] ) . '</p></div>';
         }
 
         echo '<form method="post" action="options.php">';
@@ -141,18 +141,15 @@ class SWS_Admin {
         $api = new SWS_API();
         $result = $api->authenticate();
 
-        if ( is_wp_error( $result ) ) {
-            $url = add_query_arg( array(
-                'page' => 'sws-connection',
-                'sws_test' => 'error',
-                'sws_msg' => rawurlencode( $result->get_error_message() ),
-            ), admin_url( 'admin.php' ) );
-        } else {
-            $url = add_query_arg( array(
-                'page' => 'sws-connection',
-                'sws_test' => 'success',
-            ), admin_url( 'admin.php' ) );
-        }
+        $notice = array(
+            'type'    => is_wp_error( $result ) ? 'error' : 'success',
+            'message' => is_wp_error( $result ) ? $result->get_error_message() : 'Conexão validada com sucesso!',
+        );
+        set_transient( 'sws_connection_notice_' . get_current_user_id(), $notice, 60 );
+
+        $url = add_query_arg( array(
+            'page' => 'sws-connection',
+        ), admin_url( 'admin.php' ) );
 
         wp_safe_redirect( $url );
         exit;
