@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+- Fixed ProductTypes catalog retrieval to use Stricker's documented direct JSON download endpoint.
+- ProductTypes requests now authenticate the catalog request itself with the persisted Access Key instead of relying on a cached session token.
+- Added explicit handling for HTTP, JSON and Stricker API errors returned by the direct catalog endpoint.
+- Version bumped from 0.3.1 to 0.3.2.
+
 ## 0.3.1
 - Fixed Access Key persistence when the setting does not yet exist in the WordPress options table.
 - Access Key is now encrypted during Settings API sanitisation, avoiding the `update_option` hook edge case on first save.
