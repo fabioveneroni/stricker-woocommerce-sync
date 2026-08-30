@@ -20,3 +20,9 @@ Antes de usar em produção, confirme a URL base REST e o formato exato dos par�
 - URL padrão configurada para o endpoint HTTPS do manual.
 - Consulta inicial de ProductTypes/Categorias.
 - Tela de diagnóstico mostra o retorno quando o parser ainda não reconhece o formato.
+
+== Versão 0.2.1 ==
+- Corrigida a persistência da Access Key: o valor informado agora é sanitizado sem ser descartado antes da criptografia.
+- Access Key continua armazenada criptografada no banco e nunca é devolvida ao navegador.
+- Teste de conexão agora exibe "Conexão validada com sucesso!" quando a autenticação retorna um session token válido.
+- Adicionado submenu "Categorias" no painel Stricker Sync, habilitando a consulta de ProductTypes.

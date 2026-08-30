@@ -35,6 +35,15 @@ class SWS_Admin {
             'sws-connection',
             array( __CLASS__, 'connection' )
         );
+
+        add_submenu_page(
+            'sws-dashboard',
+            'Categorias',
+            'Categorias',
+            'manage_options',
+            'sws-categories',
+            array( __CLASS__, 'categories' )
+        );
     }
 
     private static function header( $title ) {
@@ -62,7 +71,7 @@ class SWS_Admin {
         if ( isset( $_GET['sws_test'] ) ) {
             $ok = 'success' === sanitize_key( $_GET['sws_test'] );
             echo '<div class="notice notice-' . ( $ok ? 'success' : 'error' ) . '"><p>' .
-                esc_html( $ok ? 'Conexão/autenticação concluída.' : ( isset( $_GET['sws_msg'] ) ? rawurldecode( wp_unslash( $_GET['sws_msg'] ) ) : 'Falha na conexão.' ) ) .
+                esc_html( $ok ? 'Conexão validada com sucesso!' : ( isset( $_GET['sws_msg'] ) ? rawurldecode( wp_unslash( $_GET['sws_msg'] ) ) : 'Falha na conexão.' ) ) .
                 '</p></div>';
         }
 

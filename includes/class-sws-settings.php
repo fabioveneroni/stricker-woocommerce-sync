@@ -24,7 +24,7 @@ class SWS_Settings {
 
         register_setting( 'sws_settings', 'sws_access_key_new', array(
             'type' => 'string',
-            'sanitize_callback' => '__return_empty_string',
+            'sanitize_callback' => function( $value ) { return trim( (string) $value ); },
         ) );
 
         add_settings_section(
