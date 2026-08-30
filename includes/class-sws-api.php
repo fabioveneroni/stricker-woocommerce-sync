@@ -16,15 +16,14 @@ class SWS_API {
     }
 
     public function is_configured() {
-        return ! empty( $this->client_id ) && ! empty( $this->access_key ) && ! empty( $this->base_url );
+        return ! empty( $this->access_key ) && ! empty( $this->base_url );
     }
 
     public function authenticate() {
         if ( ! $this->is_configured() ) {
-            return new WP_Error( 'sws_not_configured', 'Configure o Client ID e a Access Key antes de testar a conexão.' );
+            return new WP_Error( 'sws_not_configured', 'Configure a Access Key antes de testar a conexão.' );
         }
 
-        // O manual da Stricker documenta a autenticação como GET + AccessKey.
         $url = add_query_arg( array( 'AccessKey' => $this->access_key ), $this->base_url . '/authenticateclient' );
         $response = wp_remote_get( $url, array(
             'timeout' => 30,
@@ -56,9 +55,7 @@ class SWS_API {
             return true;
         }
 
-        // Algumas respostas de autenticação são booleanas/numéricas; neste caso
-        // ainda registramos o payload em memória para diagnóstico no próximo passo.
-        return new WP_Error( 'sws_no_token', 'A Stricker respondeu sem session token reconhecível. A resposta retornada foi registrada para diagnóstico.' );
+        return new WP_Error( 'sws_no_token', 'A Stricker respondeu sem session token reconhecível.' );
     }
 
     private function find_value_recursive( $data, $keys ) {
@@ -117,8 +114,51 @@ class SWS_API {
         return $data;
     }
 
+    /**
+     * ProductTypes is also documented by Stricker as a direct catalog download.
+     * This path authenticates the request itself with AccessKey and therefore
+     * avoids depending on a potentially stale session token for catalog data.
+     */
     public function get_categories() {
-        return $this->request( 'productTypes', array( 'lang' => get_option( 'sws_language', 'PT' ) ) );
+        if ( ! $this->is_configured() ) {
+            return new WP_Error( 'sws_not_configured', 'Configure a Access Key antes de consultar os ProductTypes.' );
+        }
+
+        $language = get_option( 'sws_language', 'PT' );
+        $url = add_query_arg(
+            array(
+                'AccessKey' => $this->access_key,
+                'data'      => 'producttypes',
+                'lang'      => $language,
+                'extension' => 'json',
+            ),
+            'https://ws.spotgifts.com.br/downloads/v1SSL/file'
+        );
+
+        $response = wp_remote_get( $url, array(
+            'timeout' => 60,
+            'headers' => array( 'Accept' => 'application/json' ),
+        ) );
+
+        if ( is_wp_error( $response ) ) return $response;
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $raw  = wp_remote_retrieve_body( $response );
+        $data = json_decode( $raw, true );
+
+        if ( $code < 200 || $code >= 300 ) {
+            return new WP_Error( 'sws_api_error', 'Erro HTTP ' . $code . ' ao consultar ProductTypes.', array( 'response' => $raw ) );
+        }
+
+        if ( ! is_array( $data ) ) {
+            return new WP_Error( 'sws_invalid_response', 'A Stricker retornou um ProductTypes que não pôde ser interpretado como JSON.', array( 'response' => $raw ) );
+        }
+
+        if ( isset( $data['ErrorCode'] ) && $data['ErrorCode'] ) {
+            return new WP_Error( 'sws_api_error', ! empty( $data['ErrorMessage'] ) ? sanitize_text_field( $data['ErrorMessage'] ) : 'A Stricker retornou um erro ao consultar ProductTypes.', array( 'response' => $raw ) );
+        }
+
+        return $data;
     }
 
     public function get_products() {
