@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Stricker WooCommerce Sync
  * Description: Integra o catálogo da Stricker ao WooCommerce com autenticação segura, consulta de categorias, consulta do catálogo e estrutura preparada para sincronização.
- * Version: 0.4.2
+ * Version: 0.4.3
  * Author: OpenAI
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'SWS_VERSION', '0.4.2' );
+define( 'SWS_VERSION', '0.4.3' );
 define( 'SWS_FILE', __FILE__ );
 define( 'SWS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SWS_URL', plugin_dir_url( __FILE__ ) );
@@ -21,10 +21,12 @@ require_once SWS_DIR . 'includes/class-sws-crypto.php';
 require_once SWS_DIR . 'includes/class-sws-settings.php';
 require_once SWS_DIR . 'includes/class-sws-api.php';
 require_once SWS_DIR . 'includes/class-sws-admin.php';
+require_once SWS_DIR . 'includes/class-sws-safe-tree.php';
 
 add_action( 'plugins_loaded', function() {
     SWS_Settings::init();
     SWS_Admin::init();
+    SWS_Safe_Tree::init();
     if ( ! class_exists( 'WooCommerce' ) ) {
         add_action( 'admin_notices', function() {
             if ( current_user_can( 'activate_plugins' ) ) echo '<div class="notice notice-warning"><p><strong>Stricker WooCommerce Sync:</strong> o plugin está ativo, mas o WooCommerce ainda não está instalado ou ativo. A importação dependerá do WooCommerce.</p></div>';
