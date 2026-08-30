@@ -22,9 +22,12 @@ class SWS_Settings {
             'sanitize_callback' => function( $value ) { return in_array( strtoupper( (string) $value ), array( 'PT' ), true ) ? strtoupper( (string) $value ) : 'PT'; },
         ) );
 
+        // The submitted value is encrypted during sanitisation. This avoids relying
+        // on update_option_sws_access_key_new, which does not fire when the option
+        // is being added for the first time.
         register_setting( 'sws_settings', 'sws_access_key_new', array(
             'type' => 'string',
-            'sanitize_callback' => function( $value ) { return trim( (string) $value ); },
+            'sanitize_callback' => array( __CLASS__, 'sanitize_access_key' ),
         ) );
 
         add_settings_section(
@@ -40,8 +43,6 @@ class SWS_Settings {
         add_settings_field( 'sws_access_key', 'Access Key', array( __CLASS__, 'field_access_key' ), 'sws-connection', 'sws_connection' );
         add_settings_field( 'sws_api_base_url', 'URL base da API', array( __CLASS__, 'field_base_url' ), 'sws-connection', 'sws_connection' );
         add_settings_field( 'sws_language', 'Idioma do catálogo', array( __CLASS__, 'field_language' ), 'sws-connection', 'sws_connection' );
-
-        add_action( 'update_option_sws_access_key_new', array( __CLASS__, 'save_access_key' ), 10, 3 );
     }
 
     public static function field_client_id() {
@@ -64,10 +65,19 @@ class SWS_Settings {
         echo '<p class="description">Nesta versão, o catálogo será consultado em PT, conforme a documentação fornecida.</p>';
     }
 
-    public static function save_access_key( $old, $value, $option ) {
-        if ( empty( $value ) ) return;
+    public static function sanitize_access_key( $value ) {
+        $value = trim( (string) $value );
+        if ( '' === $value ) {
+            return '';
+        }
+
         $encrypted = SWS_Crypto::encrypt( $value );
-        if ( $encrypted ) update_option( SWS_Crypto::OPTION, $encrypted, false );
-        delete_option( 'sws_access_key_new' );
+        if ( ! $encrypted ) {
+            add_settings_error( 'sws_settings', 'sws_access_key_encrypt', 'Não foi possível proteger a Access Key no servidor.', 'error' );
+            return '';
+        }
+
+        update_option( SWS_Crypto::OPTION, $encrypted, false );
+        return '';
     }
 }
