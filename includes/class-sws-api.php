@@ -81,11 +81,17 @@ class SWS_API {
         $query = array_merge( array( 'token' => $this->token ), $args );
         $url = add_query_arg( $query, $this->base_url . '/' . ltrim( $endpoint, '/' ) );
 
+        $started = microtime( true );
         $response = wp_remote_get( $url, array(
             'timeout' => 60,
+            'redirection' => 3,
             'headers' => array( 'Accept' => 'application/json' ),
         ) );
-        if ( is_wp_error( $response ) ) return $response;
+        $elapsed = round( microtime( true ) - $started, 2 );
+
+        if ( is_wp_error( $response ) ) {
+            return new WP_Error( 'sws_transport_error', 'Falha de comunicação com a Stricker após ' . $elapsed . 's: ' . $response->get_error_message() );
+        }
 
         $code = wp_remote_retrieve_response_code( $response );
         $raw  = wp_remote_retrieve_body( $response );
@@ -100,11 +106,11 @@ class SWS_API {
         }
 
         if ( $code < 200 || $code >= 300 ) {
-            return new WP_Error( 'sws_api_error', 'Erro HTTP ' . $code . ' na API.', array( 'response' => $raw ) );
+            return new WP_Error( 'sws_api_error', 'Erro HTTP ' . $code . ' na API da Stricker após ' . $elapsed . 's.', array( 'response' => $raw ) );
         }
 
         if ( ! is_array( $data ) ) {
-            return new WP_Error( 'sws_invalid_response', 'A API retornou conteúdo que não pôde ser interpretado como JSON.' );
+            return new WP_Error( 'sws_invalid_response', 'A Stricker respondeu após ' . $elapsed . 's, mas o conteúdo não pôde ser interpretado como JSON.' );
         }
 
         if ( isset( $data['ErrorCode'] ) && $data['ErrorCode'] ) {
@@ -114,51 +120,16 @@ class SWS_API {
         return $data;
     }
 
-    /**
-     * ProductTypes is also documented by Stricker as a direct catalog download.
-     * This path authenticates the request itself with AccessKey and therefore
-     * avoids depending on a potentially stale session token for catalog data.
-     */
     public function get_categories() {
-        if ( ! $this->is_configured() ) {
-            return new WP_Error( 'sws_not_configured', 'Configure a Access Key antes de consultar os ProductTypes.' );
-        }
+        // O manual documenta ProductTypes no endpoint REST, usando session token + lang.
+        // Forçamos uma nova sessão para evitar o uso de um transient antigo/inválido.
+        delete_transient( 'sws_session_token' );
+        $this->token = '';
 
-        $language = get_option( 'sws_language', 'PT' );
-        $url = add_query_arg(
-            array(
-                'AccessKey' => $this->access_key,
-                'data'      => 'producttypes',
-                'lang'      => $language,
-                'extension' => 'json',
-            ),
-            'https://ws.spotgifts.com.br/downloads/v1SSL/file'
-        );
+        $auth = $this->authenticate();
+        if ( is_wp_error( $auth ) ) return $auth;
 
-        $response = wp_remote_get( $url, array(
-            'timeout' => 60,
-            'headers' => array( 'Accept' => 'application/json' ),
-        ) );
-
-        if ( is_wp_error( $response ) ) return $response;
-
-        $code = wp_remote_retrieve_response_code( $response );
-        $raw  = wp_remote_retrieve_body( $response );
-        $data = json_decode( $raw, true );
-
-        if ( $code < 200 || $code >= 300 ) {
-            return new WP_Error( 'sws_api_error', 'Erro HTTP ' . $code . ' ao consultar ProductTypes.', array( 'response' => $raw ) );
-        }
-
-        if ( ! is_array( $data ) ) {
-            return new WP_Error( 'sws_invalid_response', 'A Stricker retornou um ProductTypes que não pôde ser interpretado como JSON.', array( 'response' => $raw ) );
-        }
-
-        if ( isset( $data['ErrorCode'] ) && $data['ErrorCode'] ) {
-            return new WP_Error( 'sws_api_error', ! empty( $data['ErrorMessage'] ) ? sanitize_text_field( $data['ErrorMessage'] ) : 'A Stricker retornou um erro ao consultar ProductTypes.', array( 'response' => $raw ) );
-        }
-
-        return $data;
+        return $this->request( 'productTypes', array( 'lang' => get_option( 'sws_language', 'PT' ) ) );
     }
 
     public function get_products() {
