@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Stricker WooCommerce Sync
- * Description: Integra o catálogo da Stricker ao WooCommerce com autenticação segura, consulta de categorias, importação em lotes e estrutura preparada para WP-Cron.
- * Version: 0.3.6
+ * Description: Integra o catálogo da Stricker ao WooCommerce com autenticação segura, consulta de categorias, consulta de produtos e estrutura preparada para sincronização em lotes/WP-Cron.
+ * Version: 0.4.0
  * Author: OpenAI
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'SWS_VERSION', '0.3.6' );
+define( 'SWS_VERSION', '0.4.0' );
 define( 'SWS_FILE', __FILE__ );
 define( 'SWS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SWS_URL', plugin_dir_url( __FILE__ ) );
