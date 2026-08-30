@@ -2,98 +2,16 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 class SWS_API {
-    private $client_id;
-    private $access_key;
-    private $token;
-    private $base_url;
-
-    public function __construct() {
-        $this->client_id = get_option( 'sws_client_id', '' );
-        $encrypted = get_option( SWS_Crypto::OPTION, '' );
-        $this->access_key = SWS_Crypto::decrypt( $encrypted );
-        $this->token = get_transient( 'sws_session_token' );
-        $this->base_url = untrailingslashit( get_option( 'sws_api_base_url', 'https://ws.spotgifts.com.br/api/v1SSL' ) );
-    }
-
-    public function is_configured() { return ! empty( $this->access_key ) && ! empty( $this->base_url ); }
-
-    public function authenticate() {
-        if ( ! $this->is_configured() ) return new WP_Error( 'sws_not_configured', 'Configure a Access Key antes de testar a conexão.' );
-        $url = add_query_arg( array( 'AccessKey' => $this->access_key ), $this->base_url . '/authenticateclient' );
-        $response = wp_remote_get( $url, array( 'timeout' => 60, 'headers' => array( 'Accept' => 'application/json' ) ) );
-        if ( is_wp_error( $response ) ) return $response;
-        $code = wp_remote_retrieve_response_code( $response ); $raw = wp_remote_retrieve_body( $response ); $data = json_decode( $raw, true );
-        if ( $code < 200 || $code >= 300 ) return new WP_Error( 'sws_api_error', 'A Stricker retornou HTTP ' . $code . '.', array( 'response' => $raw ) );
-        if ( ! is_array( $data ) ) return new WP_Error( 'sws_invalid_response', 'A resposta de autenticação não está em JSON válido.' );
-        if ( isset( $data['ErrorCode'] ) && $data['ErrorCode'] ) return new WP_Error( 'sws_auth_error', ! empty( $data['ErrorMessage'] ) ? sanitize_text_field( $data['ErrorMessage'] ) : 'A Stricker recusou a autenticação.' );
-        $token = $this->find_value_recursive( $data, array( 'session_token', 'sessionToken', 'SessionToken', 'token', 'Token' ) );
-        if ( $token ) { $this->token = sanitize_text_field( $token ); set_transient( 'sws_session_token', $this->token, 23 * HOUR_IN_SECONDS ); return true; }
-        return new WP_Error( 'sws_no_token', 'A Stricker respondeu sem session token reconhecível.' );
-    }
-
-    private function find_value_recursive( $data, $keys ) {
-        if ( ! is_array( $data ) ) return '';
-        foreach ( $keys as $key ) if ( isset( $data[$key] ) && is_scalar( $data[$key] ) && '' !== (string)$data[$key] ) return (string)$data[$key];
-        foreach ( $data as $value ) if ( is_array( $value ) ) { $found = $this->find_value_recursive( $value, $keys ); if ( $found ) return $found; }
-        return '';
-    }
-
-    private function request( $endpoint, $args = array() ) {
-        if ( ! $this->token ) { $auth = $this->authenticate(); if ( is_wp_error( $auth ) ) return $auth; }
-        $url = add_query_arg( array_merge( array( 'token' => $this->token ), $args ), $this->base_url . '/' . ltrim( $endpoint, '/' ) );
-        $started = microtime( true ); $response = wp_remote_get( $url, array( 'timeout' => 60, 'redirection' => 3, 'headers' => array( 'Accept' => 'application/json' ) ) ); $elapsed = round( microtime( true ) - $started, 2 );
-        if ( is_wp_error( $response ) ) return new WP_Error( 'sws_transport_error', 'Falha de comunicação com a Stricker após ' . $elapsed . 's: ' . $response->get_error_message() );
-        $code = wp_remote_retrieve_response_code( $response ); $raw = wp_remote_retrieve_body( $response ); $data = json_decode( $raw, true );
-        if ( $code === 401 || ( is_array($data) && isset($data['ErrorCode']) && '13' === (string)$data['ErrorCode'] ) ) { delete_transient('sws_session_token'); $this->token=''; $auth=$this->authenticate(); if(is_wp_error($auth)) return $auth; return $this->request($endpoint,$args); }
-        if ( $code < 200 || $code >= 300 ) return new WP_Error( 'sws_api_error', 'Erro HTTP ' . $code . ' na API da Stricker após ' . $elapsed . 's.', array('response'=>$raw) );
-        if ( ! is_array($data) ) return new WP_Error('sws_invalid_response','A Stricker respondeu após '.$elapsed.'s, mas o conteúdo não pôde ser interpretado como JSON.');
-        if ( isset($data['ErrorCode']) && $data['ErrorCode'] ) return new WP_Error('sws_api_error', !empty($data['ErrorMessage']) ? sanitize_text_field($data['ErrorMessage']) : 'A API retornou um erro.');
-        return $data;
-    }
-
-    private function soap_client() {
-        if ( ! class_exists( 'SoapClient' ) ) return new WP_Error( 'sws_soap_missing', 'A extensão SOAP do PHP não está habilitada neste servidor.' );
-        $soap_file = SWS_DIR . 'includes/class-stricker-soap-client.php';
-        if ( ! file_exists( $soap_file ) ) return new WP_Error( 'sws_soap_client_missing', 'O cliente SOAP da Stricker não foi encontrado no plugin.' );
-        require_once $soap_file;
-        try { return new StrickerSoapClient( 'https' ); }
-        catch ( Throwable $e ) { return new WP_Error( 'sws_soap_error', 'Não foi possível inicializar o cliente SOAP da Stricker: ' . sanitize_text_field( $e->getMessage() ) ); }
-    }
-
-    private function soap_session( $webservice ) {
-        $response = $webservice->AuthenticateClient( $this->access_key );
-        if ( isset($response->ErrorCode) && $response->ErrorCode ) return new WP_Error('sws_auth_error', !empty($response->ErrorMessage) ? sanitize_text_field($response->ErrorMessage) : 'A Stricker recusou a autenticação SOAP.');
-        $token = isset($response->Token) ? (string)$response->Token : '';
-        if ( '' === $token ) return new WP_Error('sws_no_token','A autenticação SOAP da Stricker não retornou um session token.');
-        $validation = $webservice->ValidateSession($token);
-        if ( isset($validation->Status) && ! $validation->Status ) return new WP_Error('sws_session_invalid','A Stricker não validou o session token.');
-        return $token;
-    }
-
-    public function get_categories() {
-        if ( ! $this->is_configured() ) return new WP_Error( 'sws_not_configured', 'Access Key não encontrada. Salve a Access Key antes de consultar os ProductTypes.' );
-        $webservice = $this->soap_client(); if ( is_wp_error( $webservice ) ) return $webservice;
-        try {
-            $token = $this->soap_session( $webservice ); if ( is_wp_error( $token ) ) return $token;
-            $result = $webservice->ProductTypes( $token, get_option('sws_language','PT') );
-            return $this->soap_result_to_array( $result );
-        } catch ( SoapFault $e ) { return new WP_Error('sws_soap_error','Falha SOAP ao consultar ProductTypes: '.sanitize_text_field($e->getMessage()));
-        } catch ( Throwable $e ) { return new WP_Error('sws_soap_error','Falha ao consultar ProductTypes: '.sanitize_text_field($e->getMessage())); }
-    }
-
-    public function get_products() {
-        if ( ! $this->is_configured() ) return new WP_Error( 'sws_not_configured', 'Access Key não encontrada. Salve a Access Key antes de consultar os produtos.' );
-        $webservice = $this->soap_client(); if ( is_wp_error( $webservice ) ) return $webservice;
-        try {
-            $token = $this->soap_session( $webservice ); if ( is_wp_error( $token ) ) return $token;
-            $result = $webservice->Products( $token, get_option('sws_language','PT') );
-            return $this->soap_result_to_array( $result );
-        } catch ( SoapFault $e ) { return new WP_Error('sws_soap_error','Falha SOAP ao consultar Products: '.sanitize_text_field($e->getMessage()));
-        } catch ( Throwable $e ) { return new WP_Error('sws_soap_error','Falha ao consultar Products: '.sanitize_text_field($e->getMessage())); }
-    }
-
-    private function soap_result_to_array( $result ) {
-        if ( is_object( $result ) ) $result = json_decode( wp_json_encode( $result ), true );
-        return is_array( $result ) ? $result : array( 'Result' => $result );
-    }
+    private $client_id; private $access_key; private $token; private $base_url;
+    public function __construct() { $this->client_id=get_option('sws_client_id',''); $encrypted=get_option(SWS_Crypto::OPTION,''); $this->access_key=SWS_Crypto::decrypt($encrypted); $this->token=get_transient('sws_session_token'); $this->base_url=untrailingslashit(get_option('sws_api_base_url','https://ws.spotgifts.com.br/api/v1SSL')); }
+    public function is_configured() { return !empty($this->access_key) && !empty($this->base_url); }
+    public function authenticate() { if(!$this->is_configured()) return new WP_Error('sws_not_configured','Configure a Access Key antes de testar a conexão.'); $url=add_query_arg(array('AccessKey'=>$this->access_key),$this->base_url.'/authenticateclient'); $response=wp_remote_get($url,array('timeout'=>60,'headers'=>array('Accept'=>'application/json'))); if(is_wp_error($response))return $response; $code=wp_remote_retrieve_response_code($response);$raw=wp_remote_retrieve_body($response);$data=json_decode($raw,true);if($code<200||$code>=300)return new WP_Error('sws_api_error','A Stricker retornou HTTP '.$code.'.',array('response'=>$raw));if(!is_array($data))return new WP_Error('sws_invalid_response','A resposta de autenticação não está em JSON válido.');if(isset($data['ErrorCode'])&&$data['ErrorCode'])return new WP_Error('sws_auth_error',!empty($data['ErrorMessage'])?sanitize_text_field($data['ErrorMessage']):'A Stricker recusou a autenticação.');$token=$this->find_value_recursive($data,array('session_token','sessionToken','SessionToken','token','Token'));if($token){$this->token=sanitize_text_field($token);set_transient('sws_session_token',$this->token,23*HOUR_IN_SECONDS);return true;}return new WP_Error('sws_no_token','A Stricker respondeu sem session token reconhecível.'); }
+    private function find_value_recursive($data,$keys){if(!is_array($data))return '';foreach($keys as $key)if(isset($data[$key])&&is_scalar($data[$key])&&''!==(string)$data[$key])return(string)$data[$key];foreach($data as $value)if(is_array($value)){ $found=$this->find_value_recursive($value,$keys);if($found)return$found;}return '';}
+    private function request($endpoint,$args=array()){if(!$this->token){$auth=$this->authenticate();if(is_wp_error($auth))return$auth;}$url=add_query_arg(array_merge(array('token'=>$this->token),$args),$this->base_url.'/'.ltrim($endpoint,'/'));$started=microtime(true);$response=wp_remote_get($url,array('timeout'=>60,'redirection'=>3,'headers'=>array('Accept'=>'application/json')));$elapsed=round(microtime(true)-$started,2);if(is_wp_error($response))return new WP_Error('sws_transport_error','Falha de comunicação com a Stricker após '.$elapsed.'s: '.$response->get_error_message());$code=wp_remote_retrieve_response_code($response);$raw=wp_remote_retrieve_body($response);$data=json_decode($raw,true);if($code===401||(is_array($data)&&isset($data['ErrorCode'])&&'13'===(string)$data['ErrorCode'])){delete_transient('sws_session_token');$this->token='';$auth=$this->authenticate();if(is_wp_error($auth))return$auth;return$this->request($endpoint,$args);}if($code<200||$code>=300)return new WP_Error('sws_api_error','Erro HTTP '.$code.' na API da Stricker após '.$elapsed.'s.',array('response'=>$raw));if(!is_array($data))return new WP_Error('sws_invalid_response','A Stricker respondeu após '.$elapsed.'s, mas o conteúdo não pôde ser interpretado como JSON.');if(isset($data['ErrorCode'])&&$data['ErrorCode'])return new WP_Error('sws_api_error',!empty($data['ErrorMessage'])?sanitize_text_field($data['ErrorMessage']):'A API retornou um erro.');return$data;}
+    private function soap_client(){if(!class_exists('SoapClient'))return new WP_Error('sws_soap_missing','A extensão SOAP do PHP não está habilitada neste servidor.');$soap_file=SWS_DIR.'includes/class-stricker-soap-client.php';if(!file_exists($soap_file))return new WP_Error('sws_soap_client_missing','O cliente SOAP da Stricker não foi encontrado no plugin.');require_once$soap_file;try{return new StrickerSoapClient('https');}catch(Throwable$e){return new WP_Error('sws_soap_error','Não foi possível inicializar o cliente SOAP da Stricker: '.sanitize_text_field($e->getMessage()));}}
+    private function soap_session($webservice){$response=$webservice->AuthenticateClient($this->access_key);if(isset($response->ErrorCode)&&$response->ErrorCode)return new WP_Error('sws_auth_error',!empty($response->ErrorMessage)?sanitize_text_field($response->ErrorMessage):'A Stricker recusou a autenticação SOAP.');$token=isset($response->Token)?(string)$response->Token:'';if(''===$token)return new WP_Error('sws_no_token','A autenticação SOAP da Stricker não retornou um session token.');$validation=$webservice->ValidateSession($token);if(isset($validation->Status)&&!$validation->Status)return new WP_Error('sws_session_invalid','A Stricker não validou o session token.');return$token;}
+    public function get_categories(){if(!$this->is_configured())return new WP_Error('sws_not_configured','Access Key não encontrada. Salve a Access Key antes de consultar os ProductTypes.');$webservice=$this->soap_client();if(is_wp_error($webservice))return$webservice;try{$token=$this->soap_session($webservice);if(is_wp_error($token))return$token;$result=$webservice->ProductTypes($token,get_option('sws_language','PT'));return$this->soap_result_to_array($result);}catch(SoapFault$e){return new WP_Error('sws_soap_error','Falha SOAP ao consultar ProductTypes: '.sanitize_text_field($e->getMessage()));}catch(Throwable$e){return new WP_Error('sws_soap_error','Falha ao consultar ProductTypes: '.sanitize_text_field($e->getMessage()));}}
+    public function get_products(){if(!$this->is_configured())return new WP_Error('sws_not_configured','Access Key não encontrada. Salve a Access Key antes de consultar os produtos.');$webservice=$this->soap_client();if(is_wp_error($webservice))return$webservice;try{$token=$this->soap_session($webservice);if(is_wp_error($token))return$token;$result=$webservice->Products($token,get_option('sws_language','PT'));return$this->soap_result_to_array($result);}catch(SoapFault$e){return new WP_Error('sws_soap_error','Falha SOAP ao consultar Products: '.sanitize_text_field($e->getMessage()));}catch(Throwable$e){return new WP_Error('sws_soap_error','Falha ao consultar Products: '.sanitize_text_field($e->getMessage()));}}
+    public function get_products_tree(){if(!$this->is_configured())return new WP_Error('sws_not_configured','Access Key não encontrada. Salve a Access Key antes de consultar o ProductsTree.');$webservice=$this->soap_client();if(is_wp_error($webservice))return$webservice;try{$token=$this->soap_session($webservice);if(is_wp_error($token))return$token;$result=$webservice->ProductsTree($token,get_option('sws_language','PT'));return$this->soap_result_to_array($result);}catch(SoapFault$e){return new WP_Error('sws_soap_error','Falha SOAP ao consultar ProductsTree: '.sanitize_text_field($e->getMessage()));}catch(Throwable$e){return new WP_Error('sws_soap_error','Falha ao consultar ProductsTree: '.sanitize_text_field($e->getMessage()));}}
+    private function soap_result_to_array($result){if(is_object($result))$result=json_decode(wp_json_encode($result),true);return is_array($result)?$result:array('Result'=>$result);}
 }
