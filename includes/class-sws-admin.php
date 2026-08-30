@@ -93,9 +93,9 @@ class SWS_Admin {
         echo '<h2>Resultado da API</h2>';
         echo '<p><strong>Itens identificados:</strong> ' . esc_html( count( $items ) ) . '</p>';
         if ( ! empty( $items ) ) {
-            echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Nome / descrição</th><th>Subtipo</th></tr></thead><tbody>';
+            echo '<table class="widefat striped"><thead><tr><th>Código do tipo</th><th>Tipo de produto</th><th>Código do subtipo</th><th>Subtipo</th></tr></thead><tbody>';
             foreach ( $items as $item ) {
-                echo '<tr><td>' . esc_html( $item['id'] ) . '</td><td>' . esc_html( $item['name'] ) . '</td><td>' . esc_html( $item['subtype'] ) . '</td></tr>';
+                echo '<tr><td>' . esc_html( $item['type_id'] ) . '</td><td>' . esc_html( $item['type_name'] ) . '</td><td>' . esc_html( $item['subtype_id'] ) . '</td><td>' . esc_html( $item['subtype_name'] ) . '</td></tr>';
             }
             echo '</tbody></table>';
         } else {
@@ -106,24 +106,61 @@ class SWS_Admin {
         echo '</div></div>';
     }
 
+    /**
+     * Parseia a estrutura real retornada pelo SOAP ProductTypes:
+     * Types -> Type[] -> TypeCode/TypeDescription -> SubTypes -> SubType[].
+     */
     private static function extract_category_rows( $data, &$items ) {
         if ( ! is_array( $data ) ) return;
+
+        if ( isset( $data['Types']['Type'] ) ) {
+            $types = $data['Types']['Type'];
+            if ( isset( $types['TypeCode'] ) || isset( $types['TypeDescription'] ) ) {
+                $types = array( $types );
+            }
+
+            if ( is_array( $types ) ) {
+                foreach ( $types as $type ) {
+                    if ( ! is_array( $type ) ) continue;
+
+                    $type_id   = isset( $type['TypeCode'] ) ? (string) $type['TypeCode'] : '';
+                    $type_name = isset( $type['TypeDescription'] ) ? (string) $type['TypeDescription'] : '';
+                    $subtypes  = isset( $type['SubTypes']['SubType'] ) ? $type['SubTypes']['SubType'] : array();
+
+                    if ( isset( $subtypes['SubTypeCode'] ) || isset( $subtypes['SubTypeDescription'] ) ) {
+                        $subtypes = array( $subtypes );
+                    }
+                    if ( ! is_array( $subtypes ) ) $subtypes = array();
+
+                    if ( empty( $subtypes ) ) {
+                        if ( $type_id || $type_name ) {
+                            $items[] = array(
+                                'type_id' => $type_id,
+                                'type_name' => $type_name,
+                                'subtype_id' => '',
+                                'subtype_name' => '',
+                            );
+                        }
+                        continue;
+                    }
+
+                    foreach ( $subtypes as $subtype ) {
+                        if ( ! is_array( $subtype ) ) continue;
+                        $items[] = array(
+                            'type_id' => $type_id,
+                            'type_name' => $type_name,
+                            'subtype_id' => isset( $subtype['SubTypeCode'] ) ? (string) $subtype['SubTypeCode'] : '',
+                            'subtype_name' => isset( $subtype['SubTypeDescription'] ) ? (string) $subtype['SubTypeDescription'] : '',
+                        );
+                    }
+                }
+            }
+            return;
+        }
+
+        // Fallback para pequenas variações de envelope retornadas pelo SOAP converter.
         foreach ( $data as $value ) {
-            if ( ! is_array( $value ) ) continue;
-            $id = '';
-            $name = '';
-            $subtype = '';
-            foreach ( array( 'id', 'ID', 'ProductTypeID', 'ProductTypeId', 'TypeID', 'TypeId', 'code', 'Code' ) as $key ) {
-                if ( isset( $value[ $key ] ) && is_scalar( $value[ $key ] ) && '' !== (string) $value[ $key ] ) { $id = (string) $value[ $key ]; break; }
-            }
-            foreach ( array( 'description', 'Description', 'name', 'Name', 'ProductType', 'Type' ) as $key ) {
-                if ( isset( $value[ $key ] ) && is_scalar( $value[ $key ] ) && '' !== (string) $value[ $key ] ) { $name = (string) $value[ $key ]; break; }
-            }
-            foreach ( array( 'subtype', 'SubType', 'ProductSubType', 'Subtype' ) as $key ) {
-                if ( isset( $value[ $key ] ) && is_scalar( $value[ $key ] ) && '' !== (string) $value[ $key ] ) { $subtype = (string) $value[ $key ]; break; }
-            }
-            if ( $name || $id ) $items[] = array( 'id' => $id, 'name' => $name, 'subtype' => $subtype );
-            self::extract_category_rows( $value, $items );
+            if ( is_array( $value ) ) self::extract_category_rows( $value, $items );
         }
     }
 
@@ -131,7 +168,7 @@ class SWS_Admin {
         $unique = array();
         $seen = array();
         foreach ( $items as $item ) {
-            $key = strtolower( $item['id'] . '|' . $item['name'] . '|' . $item['subtype'] );
+            $key = strtolower( $item['type_id'] . '|' . $item['type_name'] . '|' . $item['subtype_id'] . '|' . $item['subtype_name'] );
             if ( isset( $seen[ $key ] ) ) continue;
             $seen[ $key ] = true;
             $unique[] = $item;
