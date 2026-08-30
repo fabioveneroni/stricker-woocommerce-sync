@@ -49,7 +49,7 @@ class SWS_API {
     public function get_categories() {
         if ( ! $this->is_configured() ) return new WP_Error( 'sws_not_configured', 'Access Key não encontrada. Salve a Access Key antes de consultar os ProductTypes.' );
         if ( ! class_exists( 'SoapClient' ) ) return new WP_Error( 'sws_soap_missing', 'A extensão SOAP do PHP não está habilitada neste servidor.' );
-        $soap_file = SWS_PLUGIN_DIR . 'includes/class-stricker-soap-client.php';
+        $soap_file = SWS_DIR . 'includes/class-stricker-soap-client.php';
         if ( ! file_exists( $soap_file ) ) return new WP_Error( 'sws_soap_client_missing', 'O cliente SOAP da Stricker não foi encontrado no plugin.' );
         require_once $soap_file;
         try {
