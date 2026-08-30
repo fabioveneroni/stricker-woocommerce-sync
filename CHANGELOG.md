@@ -1,28 +1,40 @@
 # Changelog
 
+## 0.4.1
+- Added the official Stricker SOAP `ProductsTree` method.
+- Added a ProductsTree consultation action in the Products screen.
+- ProductsTree response is displayed for analysing the complete product structure before implementing Simple vs Variable classification.
+- No WooCommerce products are created or modified by this step.
+
+## 0.4.0
+- Added Products catalogue consultation through the official Stricker SOAP `Products` method.
+- Added product response inspection before WooCommerce import.
+
+## 0.3.6
+- Fixed the ProductTypes parser to use the real Stricker structure: Types > Type > SubTypes > SubType.
+- ProductType and SubType codes and descriptions are displayed in a four-column table.
+
+## 0.3.5
+- Fixed the `SWS_PLUGIN_DIR` constant used by the SOAP integration.
+- Kept `SWS_PLUGIN_DIR` as an alias of `SWS_DIR` for compatibility.
+
+## 0.3.4
+- Added the official Stricker SOAP client wrapper for ProductTypes.
+- ProductTypes now uses AuthenticateClient, ValidateSession and ProductTypes through SOAP.
+
 ## 0.3.3
-- ProductTypes now uses the documented REST endpoint `/api/v1SSL/productTypes` with `token` and `lang`.
-- ProductTypes forces a fresh authentication so an old cached session token cannot cause a false authentication failure.
-- Improved transport diagnostics with elapsed request time for communication and HTTP failures.
-- Removed the unused Client ID requirement from API configuration checks; Stricker REST authentication is documented with AccessKey.
+- ProductTypes uses the documented REST endpoint `/api/v1SSL/productTypes` with `token` and `lang`.
+- ProductTypes forces a fresh authentication.
+- Improved transport diagnostics.
 
 ## 0.3.2
 - Fixed ProductTypes catalog retrieval to use Stricker's documented direct JSON download endpoint.
-- ProductTypes requests now authenticate the catalog request itself with the persisted Access Key instead of relying on a cached session token.
-- Added explicit handling for HTTP, JSON and Stricker API errors returned by the direct catalog endpoint.
-- Version bumped from 0.3.1 to 0.3.2.
 
 ## 0.3.1
-- Fixed Access Key persistence when the setting does not yet exist in the WordPress options table.
-- Access Key is now encrypted during Settings API sanitisation, avoiding the `update_option` hook edge case on first save.
-- ProductTypes requests now use the same persisted encrypted credential used by the connection test.
-- Version bumped from 0.3.0 to 0.3.1.
+- Fixed first-time Access Key persistence and encrypted storage.
 
 ## 0.3.0
-- Added an explicit ProductTypes consultation action instead of querying the API automatically on page load.
-- Added success/error notice after the ProductTypes request.
-- Added ProductType ID detection and a structured ID/name/subtype table.
-- Added raw API response in a collapsible diagnostic section.
+- Added explicit ProductTypes consultation, success/error notices and raw API diagnostics.
 
 ## 0.2.2
 - Fixed connection test feedback.
@@ -33,5 +45,4 @@
 
 ## 0.2.0
 - REST/HTTPS aligned with the Stricker manual.
-- Configured the default HTTPS REST endpoint.
 - Added initial ProductTypes/Categories consultation.
