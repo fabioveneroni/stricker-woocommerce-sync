@@ -11,9 +11,7 @@ class StrickerSoapClient {
         self::$protocol = ( 'http' === strtolower( $protocol ) ) ? 'http' : 'https';
     }
 
-    public function StrickerSOAPClient( $protocol ) {
-        $this->__construct( $protocol );
-    }
+    public function StrickerSOAPClient( $protocol ) { $this->__construct( $protocol ); }
 
     public static function InitializeSoap() {
         if ( self::$clientWCFAZURE === null ) {
@@ -39,9 +37,15 @@ class StrickerSoapClient {
         return $response->ValidateSessionResult;
     }
 
-    public static function ProductTypes( $token, $langage ) {
+    public static function ProductTypes( $token, $language ) {
         self::InitializeSoap();
-        $response = self::$clientWCFAZURE->ProductTypes( array( 'token' => $token, 'lang' => $langage ) );
+        $response = self::$clientWCFAZURE->ProductTypes( array( 'token' => $token, 'lang' => $language ) );
         return $response->ProductTypesResult;
+    }
+
+    public static function Products( $token, $language ) {
+        self::InitializeSoap();
+        $response = self::$clientWCFAZURE->Products( array( 'token' => $token, 'lang' => $language ) );
+        return $response->ProductsResult;
     }
 }
