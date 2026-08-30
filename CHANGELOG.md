@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+- ProductTypes now uses the documented REST endpoint `/api/v1SSL/productTypes` with `token` and `lang`.
+- ProductTypes forces a fresh authentication so an old cached session token cannot cause a false authentication failure.
+- Improved transport diagnostics with elapsed request time for communication and HTTP failures.
+- Removed the unused Client ID requirement from API configuration checks; Stricker REST authentication is documented with AccessKey.
+
 ## 0.3.2
 - Fixed ProductTypes catalog retrieval to use Stricker's documented direct JSON download endpoint.
 - ProductTypes requests now authenticate the catalog request itself with the persisted Access Key instead of relying on a cached session token.
